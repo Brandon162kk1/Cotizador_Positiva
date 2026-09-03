@@ -1,0 +1,7 @@
+﻿services:
+  cot_positiva:
+    image: cotizacion_positiva
+    volumes:
+     - ./Codigo:/app/Codigo
+
+# Comando para activar entorno virtual: venv\Scripts\activate

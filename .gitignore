@@ -1,0 +1,33 @@
+# --- Visual Studio (evitar errores de .vsidx) ---
+.vs/
+*.vsidx
+*.suo
+*.user
+
+# VSCode & PyCharm
+.vscode/
+.idea/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+
+# Entornos / credenciales
+.env
+config.json
+*.log
+
+# Archivos de datos
+*.xlsx
+*.pdf
+
+# Otros directorios generados
+Downloads/
+
+# --- Docker ---
+volumen_codigo/
+*.pid
+
+# Ignorar docker-compose (si realmente no quieres subirlo)
+#docker-compose.yml
