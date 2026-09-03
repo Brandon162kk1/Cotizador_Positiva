@@ -101,7 +101,7 @@ def resolver_empresa(ctx):
 
     return next((v for k, v in dispatch.items() if k in org), 'Otro')
 
-def crear_carpeta_descargas(ctx):
+def crear_carpeta_descargas(ctx,entorno):
 
     # --- 👇 CREAR UN BUFFER NUEVO POR CADA CORREO ---
     log_buffer = StringIO()
@@ -112,7 +112,7 @@ def crear_carpeta_descargas(ctx):
         force=True
     )
 
-    prefijo = "PRUEBAS_" if not ctx.entorno else ""
+    prefijo = "PRUEBAS_" if not entorno else ""
 
     organizacion = resolver_empresa(ctx)
 

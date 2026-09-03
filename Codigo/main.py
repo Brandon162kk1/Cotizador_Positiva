@@ -35,7 +35,7 @@ QUEUE_NAME = os.getenv("QUEUE_NAME")
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT"))
 PUERTO = os.getenv("puerto")
-
+entorno = os.getenv("entorno","false").strip().lower() == "true"
 BROWSER_DATA_DIR = os.getenv("BROWSER_DATA_DIR","/app/browser_data")
 USER_POS = os.getenv("user_pos_cot")
 PASS_POS = os.getenv("pass_pos_cot")
@@ -173,7 +173,7 @@ class Cliente(BaseModel):
 
 class CotizacionContexto:
     def __init__(self, data: dict):
-        self.entorno = data.get("entorno")
+
         self.movimiento = data.get("movimiento") or "COTIZACION"
         self.id_cot = str(data.get("id") or data.get("id_cot") or "0")
         self.compania = Compania(data)
@@ -373,11 +373,12 @@ def inicializar_sesion(page, r_conn):
 
             logging.info(f"🧩 CAPTCHA detectado - requiere intervención manual vía noVNC (puerto {PUERTO})")
             
-            # Notificar para intervención manual si hay captcha
-            url_vnc = f"{URL_N8N_BASE}:{PUERTO}/vnc_auto.html"
-            mensaje = f"""Ingresar a {url_vnc} y resolver el captcha para continuar con la cotización.
-🔑 Clave VNC: {PASS_EN_GRAFICO}"""
-            enviar_x_wsp(tipo="notificacion", mensaje=mensaje)
+            if entorno :
+                # Notificar para intervención manual si hay captcha
+                url_vnc = f"{URL_N8N_BASE}:{PUERTO}/vnc_auto.html"
+                mensaje = f"""Ingresar a {url_vnc} y resolver el captcha para continuar con la cotización.
+    🔑 Clave VNC: {PASS_EN_GRAFICO}"""
+                enviar_x_wsp(tipo="notificacion", mensaje=mensaje)
 
     except Exception as e:
         logging.info(f"ℹ️ Verificación de campos de login: {e}")
@@ -493,9 +494,9 @@ def procesar_job(page, raw_payload, job_id, r_conn):
     data = normalizar_data(raw_payload)
     ctx = CotizacionContexto(data)
 
-    ruta_carpeta = crear_carpeta_descargas(ctx)
+    ruta_carpeta = crear_carpeta_descargas(ctx,entorno)
 
-    if not ctx.entorno:
+    if not entorno:
         logging.info(ctx)
 
     cotizacion = False
@@ -772,7 +773,7 @@ def procesar_job(page, raw_payload, job_id, r_conn):
     finally:
         if error:
             tomar_captura(page, ruta_carpeta, f"ErrorCotizando_{ctx.id_cot}")
-            if ctx.entorno:
+            if entorno:
                 mensaje = f"""Hubo problemas para realizar la cotización en Positiva:
 📋 Registro: {ctx.id_cot}
 ⚠️ Motivo: {msj_error}"""
@@ -781,7 +782,7 @@ def procesar_job(page, raw_payload, job_id, r_conn):
 
         if cotizacion:
             archivo = os.path.join(ruta_carpeta, f"cot_pos_{ctx.id_cot}.pdf")
-            if ctx.entorno:
+            if entorno:
                 enviar_documento(ctx.id_cot, archivo, "cotizacion")
                 enviar_x_wsp(ctx, "documento", None, archivo)
 
