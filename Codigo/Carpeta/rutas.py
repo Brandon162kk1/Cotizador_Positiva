@@ -90,17 +90,6 @@ def renombrar_carpeta(ruta_carpeta):
     #Actualizarla
     ruta_carpeta = nueva_ruta
 
-def resolver_empresa(ctx):
-    dispatch = {
-        'dongfeng': 'Dongfeng',
-        'pangu': 'Pangu',
-        'zual': 'Zual'
-    }
-
-    org = (ctx.organizacion.nombre or "").lower()
-
-    return next((v for k, v in dispatch.items() if k in org), 'Otro')
-
 def crear_carpeta_descargas(ctx,entorno):
 
     # --- 👇 CREAR UN BUFFER NUEVO POR CADA CORREO ---
@@ -114,13 +103,11 @@ def crear_carpeta_descargas(ctx,entorno):
 
     prefijo = "PRUEBAS_" if not entorno else ""
 
-    organizacion = resolver_empresa(ctx)
-
     # 📁 rutas
     carpeta_base = os.path.join(download_path, f"{prefijo}Jishu_Car")
-    carpeta_empresa = os.path.join(carpeta_base, organizacion)
+    carpeta_empresa = os.path.join(carpeta_base, ctx.organizacion.nombre)
     carpeta_movimientod = os.path.join(carpeta_empresa,ctx.movimiento.capitalize())
-    carpeta_unica = os.path.join(carpeta_movimientod, f"{ctx.id_cot}_pos_{get_timestamp()}")
+    carpeta_unica = os.path.join(carpeta_movimientod, f"{ctx.id_cot}_POSITIVA_{get_timestamp()}")
 
     # 🏗️ crear estructura completa
     os.makedirs(carpeta_unica, exist_ok=True)

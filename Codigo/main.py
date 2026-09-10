@@ -40,7 +40,7 @@ BROWSER_DATA_DIR = os.getenv("BROWSER_DATA_DIR","/app/browser_data")
 USER_POS = os.getenv("user_pos_cot")
 PASS_POS = os.getenv("pass_pos_cot")
 URL_COT_POS = os.getenv("url_cot_positiva")
-URL_N8N_BASE = os.getenv("url_n8n_base")
+URL_HOST_BASE = os.getenv("url_host_prod",os.getenv("url_n8n_base"))
 PASS_EN_GRAFICO = os.getenv("pass_enGrafico", "")
 
 # Estado global del Worker
@@ -318,7 +318,7 @@ def sesion_caducada_detectada(page):
         pass
     return False
 
-def inicializar_sesion(page, r_conn):
+def inicializar_sesion(page, r_conn, ctx=None):
     logging.info("🔐 Inicializando/Restableciendo sesión en POSITIVA...")
     bloquear_interaccion()
 
@@ -356,52 +356,84 @@ def inicializar_sesion(page, r_conn):
     except Exception:
         pass
 
-    # Si estamos en la página de login, ingresar credenciales
-    try:
-        usuario_input = page.get_by_role("textbox", name="Usuario * Usuario *")
-        if usuario_input.is_visible(timeout=10000):
-            logging.info("🔑 Ingresando usuario y contraseña")
-            usuario_input.click()
-            usuario_input.fill(USER_POS)
+    # Bucle de hasta 3 intentos para resolución de CAPTCHA y Login
+    MAX_INTENTOS_CAPTCHA = 3
+    TIEMPO_ESPERA_INTENTO = int(os.getenv("TIEMPO_ESPERA_CAPTCHA", "180"))  # segundos por intento
+    login_exitoso = False
 
-            pass_input = page.get_by_role("textbox", name="Contraseña *")
-            pass_input.click()
-            pass_input.fill(PASS_POS)
+    for intento in range(1, MAX_INTENTOS_CAPTCHA + 1):
+        # Si en intentos posteriores ya se resolvió y cargó la pantalla principal
+        if intento > 1:
+            try:
+                boton_cotizar = page.get_by_role("button", name="Nueva cotización")
+                if boton_cotizar.is_visible(timeout=1000):
+                    login_exitoso = True
+                    break
+            except Exception:
+                pass
 
-            # ✋ Habilitar interacción para resolver CAPTCHA manualmente
-            desbloquear_interaccion()
+        # 1. Ingresar credenciales si los campos están disponibles
+        try:
+            usuario_input = page.get_by_role("textbox", name="Usuario * Usuario *")
+            if usuario_input.is_visible(timeout=3000):
+                if not usuario_input.input_value():
+                    logging.info("🔑 Ingresando usuario...")
+                    usuario_input.click()
+                    usuario_input.fill(USER_POS)
 
-            logging.info(f"🧩 CAPTCHA detectado - requiere intervención manual vía noVNC (puerto {PUERTO})")
-            
-            if entorno :
-                # Notificar para intervención manual si hay captcha
-                url_vnc = f"{URL_N8N_BASE}:{PUERTO}/vnc_auto.html"
-                mensaje = f"""Ingresar a {url_vnc} y resolver el captcha para continuar con la cotización.
-    🔑 Clave VNC: {PASS_EN_GRAFICO}"""
-                enviar_x_wsp(tipo="notificacion", mensaje=mensaje)
+                pass_input = page.get_by_role("textbox", name="Contraseña *")
+                if pass_input.is_visible(timeout=1000) and not pass_input.input_value():
+                    logging.info("🔑 Ingresando contraseña...")
+                    pass_input.click()
+                    pass_input.fill(PASS_POS)
 
-    except Exception as e:
-        logging.info(f"ℹ️ Verificación de campos de login: {e}")
+                # ✋ Habilitar interacción para resolver CAPTCHA manualmente
+                desbloquear_interaccion()
+                logging.info(f"🧩 CAPTCHA detectado - requiere intervención manual vía noVNC (Intento {intento}/{MAX_INTENTOS_CAPTCHA})")
 
-    # Esperar hasta que se complete el login y aparezca "Nueva cotización"
-    logging.info("⏳ Esperando que la sesión esté lista (Botón 'Nueva cotización')...")
-    boton_cotizar = page.get_by_role("button", name="Nueva cotización")
-    boton_cotizar.wait_for(state="visible", timeout=600000)
+                if entorno:
+                    id_cot_txt = f" N° {ctx.id_cot}" if ctx and getattr(ctx, "id_cot", None) else ""
+                    url_vnc = f"{URL_HOST_BASE}:{PUERTO}/vnc_auto.html"
+                    aviso_intento = f"\n⚠️ Intento {intento} de {MAX_INTENTOS_CAPTCHA}" if intento > 1 else ""
+                    mensaje = f"""{'Esto es una prueba ,' if not entorno else ''}Ingresar a {url_vnc} y resolver el captcha para continuar con la cotización{id_cot_txt}.{aviso_intento}\n🔑 Clave VNC: {PASS_EN_GRAFICO}"""
+                    enviar_x_wsp(tipo="notificacion", mensaje=mensaje)
 
-    # 🔒 Bloquear interacción una vez ingresado exitosamente
+        except Exception as e:
+            logging.info(f"ℹ️ Verificación de campos de login (intento {intento}): {e}")
+
+        # 2. Esperar hasta que se complete el login y aparezca "Nueva cotización"
+        logging.info(f"⏳ Esperando que la sesión esté lista (Botón 'Nueva cotización') - Intento {intento}/{MAX_INTENTOS_CAPTCHA} (máx {TIEMPO_ESPERA_INTENTO}s)...")
+        try:
+            boton_cotizar = page.get_by_role("button", name="Nueva cotización")
+            boton_cotizar.wait_for(state="visible", timeout=TIEMPO_ESPERA_INTENTO * 1000)
+            login_exitoso = True
+            break
+        except Exception:
+            logging.warning(f"⚠️ Tiempo de espera agotado para el intento {intento}/{MAX_INTENTOS_CAPTCHA} de resolución de CAPTCHA.")
+
+    # 🔒 Bloquear interacción una vez terminado el proceso
     bloquear_interaccion()
 
-    logging.info("🟢 Login exitoso. Sesión iniciada correctamente.")
-    return True
+    if login_exitoso:
+        logging.info("🟢 Login exitoso. Sesión iniciada correctamente.")
+        return True
+    else:
+        logging.error(f"❌ No se resolvió el CAPTCHA tras {MAX_INTENTOS_CAPTCHA} intentos.")
+        try:
+            logging.info("🔄 Restableciendo a la página principal de login (URL_COT_POS)...")
+            page.goto(URL_COT_POS, wait_until="networkidle")
+        except Exception as e:
+            logging.warning(f"⚠️ Error al regresar a la página de login: {e}")
+        return False
 
-def asegurar_sesion_activa(page, r_conn):
+def asegurar_sesion_activa(page, r_conn, ctx=None):
     """Verifica que la sesión en POSITIVA siga activa. Si caducó, ejecuta el login y la notificación por WSP."""
     logging.info("🔍 Verificando estado activo de la sesión...")
     
     # 1. Si detectamos la pantalla de 'Su sesión caducó' o formulario de login
     if sesion_caducada_detectada(page):
         logging.warning("⚠️ Sesión expirada detectada. Re-autenticando...")
-        return inicializar_sesion(page, r_conn)
+        return inicializar_sesion(page, r_conn, ctx=ctx)
 
     # 2. Si el botón 'Nueva cotización' está visible en pantalla
     boton_cotizar = page.get_by_role("button", name="Nueva cotización")
@@ -423,7 +455,7 @@ def asegurar_sesion_activa(page, r_conn):
 
     # 4. En caso de duda, revalidar sesión
     logging.warning("⚠️ Estado de sesión no verificado. Revalidando sesión...")
-    return inicializar_sesion(page, r_conn)
+    return inicializar_sesion(page, r_conn, ctx=ctx)
 
 def verificar_modal_error(page):
     """Verifica si el portal mostró un modal de error ('Vuelva a intentarlo' u otros modales de bloqueo)."""
@@ -455,31 +487,27 @@ def reset_session(page, r_conn):
         except Exception:
             pass
 
-        # Si detectamos que la sesión caducó
-        if sesion_caducada_detectada(page):
-            logging.warning("⚠️ Sesión expirada detectada en reset. Relanzando sesión...")
-            return inicializar_sesion(page, r_conn)
-
         # Si el botón 'Nueva cotización' ya está visible en pantalla
         boton_cotizar = page.get_by_role("button", name="Nueva cotización")
         if boton_cotizar.is_visible(timeout=1500):
             logging.info("🟢 Sesión lista en la pantalla principal.")
             return True
 
-        # Si no está visible, navegar al home
+        # Si no está visible o la sesión caducó, navegar al home / login
         page.goto(URL_COT_POS, wait_until="networkidle")
 
         if boton_cotizar.is_visible(timeout=3000):
             logging.info("🟢 Sesión restablecida en la pantalla principal.")
             return True
 
-        # Si tras navegar no está el botón, verificar/iniciar sesión
-        return inicializar_sesion(page, r_conn)
+        # Si tras navegar no está el botón, el navegador queda listo en la página de login
+        logging.info("ℹ️ Navegador posicionado en la página de login a la espera del próximo Job.")
+        return True
 
     except Exception as e:
         logging.warning(f"⚠️ Error al intentar restablecer sesión: {e}")
         try:
-            return inicializar_sesion(page, r_conn)
+            page.goto(URL_COT_POS, wait_until="networkidle")
         except Exception:
             pass
     return False
@@ -505,7 +533,8 @@ def procesar_job(page, raw_payload, job_id, r_conn):
 
     try:
         # Asegurar sesión activa antes de iniciar el Job
-        asegurar_sesion_activa(page, r_conn)
+        if not asegurar_sesion_activa(page, r_conn, ctx=ctx):
+            raise Exception("No se pudo iniciar sesión en Positiva: CAPTCHA no resuelto tras 3 intentos")
 
         # Asegurarse de estar en el formulario de cotización
         boton_nueva = page.get_by_role("button", name="Nueva cotización")
@@ -516,7 +545,8 @@ def procesar_job(page, raw_payload, job_id, r_conn):
         oficina_selector = page.get_by_text("CorporativosCuzcoIcaMirafloresPremium/EmpresarialPuno Oficina *")
         if not oficina_selector.is_visible(timeout=5000) and sesion_caducada_detectada(page):
             logging.warning("⚠️ Sesión expiró al abrir 'Nueva cotización'. Re-inicializando...")
-            asegurar_sesion_activa(page, r_conn)
+            if not asegurar_sesion_activa(page, r_conn, ctx=ctx):
+                raise Exception("No se pudo iniciar sesión en Positiva: CAPTCHA no resuelto tras 3 intentos")
             if boton_nueva.is_visible(timeout=3000):
                 boton_nueva.click()
                 logging.info("🖱️ Clic en 'Nueva cotización' (reintento)")
@@ -826,7 +856,9 @@ def main():
         context, page = iniciar_navegador(playwright)
 
         # Inicializar sesión
-        inicializar_sesion(page, r_conn)
+        sesion_ok = inicializar_sesion(page, r_conn)
+        if not sesion_ok:
+            logging.warning("⚠️ CAPTCHA no resuelto en el arranque inicial. Navegador en página de login listo para la primera solicitud.")
 
         # Estado READY
         set_worker_status(r_conn, "READY")

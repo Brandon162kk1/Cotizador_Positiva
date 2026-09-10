@@ -26,11 +26,12 @@ def enviar_x_wsp(ctx=None, tipo="notificacion", mensaje=None, archivo=None, tele
             if not celular and hasattr(ctx, "cliente"):
                 celular = getattr(ctx.cliente, "celular", None)
             telefono = celular
+            logging.info(f"Celular obtenido del contexto: {telefono}")
         except Exception:
             telefono = None
-
     if not telefono:
         telefono = os.getenv("celular_emergencia")
+        logging.warning(f"⚠️ No se encontró número de contacto, utilizando Telefono de emergencia: {telefono}")
 
     if not telefono or str(telefono).strip().lower() in ("none", ""):
         logging.info("⚠️ No se pudo enviar WhatsApp: Teléfono no definido")
@@ -42,11 +43,12 @@ def enviar_x_wsp(ctx=None, tipo="notificacion", mensaje=None, archivo=None, tele
         telefono = "51" + telefono
 
     payload = {
-        "tipo": tipo,
+        "instancia": f"{os.getenv('instancia')}",
         "telefono": telefono,
     }
 
     if tipo == "notificacion":
+        payload["tipo"] = "sendText"
         payload["mensaje"] = mensaje
     elif tipo == "documento":
 
@@ -65,9 +67,10 @@ def enviar_x_wsp(ctx=None, tipo="notificacion", mensaje=None, archivo=None, tele
             payload["archivo"] = archivo_base64
             payload["nombreArchivo"] = os.path.basename(archivo)
             payload["mimetype"] = "application/pdf"
+            payload["tipo"] = "sendMedia"
 
             id_cot = getattr(ctx, "id_cot", "") if ctx else ""
-            payload["mensaje"] = f"📎 Adjunto cotización de Positiva del registro {id_cot}."
+            payload["mensaje"] = f"📋 Adjunto cotización de Positiva del registro {id_cot}."
 
         except Exception as e:
             logging.error(f"❌ Error convirtiendo PDF a Base64: {e}")
