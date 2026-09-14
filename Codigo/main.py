@@ -582,8 +582,25 @@ def procesar_job(page, raw_payload, job_id, r_conn):
 
         page.locator("#numero-de-poliza_input").click()
         verificar_modal_error(page)
-        page.locator("span").filter(has_text="230286939").first.click()
-        logging.info("🖱️ Seleccionando póliza de positiva")
+
+        try:
+            logging.info("🔎 Buscando documento 230286939")
+
+            resultado = page.locator("span").filter(
+                has_text="230286939"
+            ).first
+
+            resultado.wait_for(state="visible", timeout=15000)
+            resultado.click(timeout=5000)
+
+            logging.info("✅ Documento 230286939 seleccionado")
+
+        except Exception as e:
+            logging.warning(f"{e}")
+            raise Exception("No se encontró la póliza de positiva")
+
+        #page.locator("span").filter(has_text="230286939").first.click()
+        #logging.info("🖱️ Seleccionando póliza de positiva")
 
         page.locator("#contratante_read").click()
         page.locator("#contratante_read").fill("")
@@ -593,7 +610,7 @@ def procesar_job(page, raw_payload, job_id, r_conn):
         # Esperar resultados en la lista desplegable (.ui-dropdown-list)
         encontrado = False
         inicio = time.time()
-        while time.time() - inicio < 20:
+        while time.time() - inicio < 30:
             opcion_cliente = page.locator(".ui-dropdown-list li").filter(has_text=str(ctx.cliente.num_doc))
             if opcion_cliente.count() > 0 and opcion_cliente.first.is_visible():
                 opcion_cliente.first.click()
@@ -634,6 +651,23 @@ def procesar_job(page, raw_payload, job_id, r_conn):
             page.locator("#create-and-copy-home-address-btn").get_by_text("Crear").click()
             logging.info("🖱️ Clic en 'Crear'")
 
+        else:
+
+            logging.info("🔍 Verificando correo electrónico...")
+            campo_correo = page.get_by_role("textbox", name=re.compile(r"Correo Electr[oó]nico", re.I)).first
+            try:
+                campo_correo.wait_for(state="visible", timeout=5000)
+                correo_actual = campo_correo.input_value().strip()
+                if not correo_actual:
+                    logging.info(f"⌨️ Correo vacío, ingresando: {ctx.cliente.correo}")
+                    campo_correo.click()
+                    campo_correo.fill(ctx.cliente.correo or "")
+                else:
+                    logging.info(f"ℹ️ Correo ya existente: '{correo_actual}'")
+            except Exception as e:
+                logging.warning(f"⚠️ No se pudo validar o ingresar el correo del contratante existente: {e}")
+                raise Exception("No se pudo ingresar el correo del cliente")
+
         page.locator("#uso_input").click()
         logging.info("🖱️ Clic en 'Uso'")
         page.locator("span").filter(has_text=f"{str(ctx.vehiculo.uso).capitalize()}").first.click()
@@ -661,37 +695,70 @@ def procesar_job(page, raw_payload, job_id, r_conn):
         page.locator("#anio-fabricacion_content li, #anio-fabricacion_content span[data-bind*='label']").filter(has_text=re.compile(f"^{re.escape(str(ctx.vehiculo.anio))}$")).first.click()
         logging.info(f"⌨️ Seleccionando año de fabricación {ctx.vehiculo.anio}")
 
-        page.locator("#clase_input").click()
+        # CLASE
+        try:
+            logging.info("🖱️ Seleccionando clase del vehículo")
 
-        def seleccionar_clase(texto):
-            page.locator("li").filter(has_text=re.compile(f"^{re.escape(texto)}$")).click()
+            page.locator("#clase_input").click()
 
-        if str(ctx.vehiculo.clase).upper() == "AUTOMOVIL":
-            seleccionar_clase("Automovil")
-        else:
-            match str(ctx.vehiculo.tipo).upper():
-                case "PICK UP 4X2":
-                    seleccionar_clase("Cmta. Pick Up/Cabina Simple")
-                case "PICK UP 4X4":
-                    seleccionar_clase("Cmta. Pick Up/Doble Cabina")
-                case "RURAL":
-                    if safe_int(ctx.vehiculo.ocupantes) > 9:
-                        seleccionar_clase("Camioneta rural mayor 9 astos")
-                    else:
-                        seleccionar_clase("Camioneta Rural hasta 9 Astos")
-                case _:
-                    seleccionar_clase("Camioneta panel")
+            def seleccionar_clase(texto):
+                try:
+                    opcion = page.locator("li").filter(
+                        has_text=re.compile(
+                            f"^{re.escape(texto)}$",
+                            re.IGNORECASE
+                        )
+                    ).first
 
-        logging.info("🖱️ Seleccionando clase del vehículo")
+                    opcion.click(timeout=5000)
+
+                except Exception:
+                    raise Exception(f"No existe la clase '{texto}'")
+
+            if str(ctx.vehiculo.clase).upper() == "AUTOMOVIL":
+                seleccionar_clase("Automovil")
+
+            else:
+                match str(ctx.vehiculo.tipo).upper():
+
+                    case "PICK UP 4X2":
+                        seleccionar_clase("Cmta. Pick Up/Cabina Simple")
+
+                    case "PICK UP 4X4":
+                        seleccionar_clase("Cmta. Pick Up/Doble Cabina")
+
+                    case "RURAL":
+                        if safe_int(ctx.vehiculo.ocupantes) > 9:
+                            seleccionar_clase("Camioneta rural mayor 9 astos")
+                        else:
+                            seleccionar_clase("Camioneta Rural hasta 9 Astos")
+
+                    case _:
+                        raise Exception(
+                            f"Tipo de vehículo no contemplado: "
+                            f"'{ctx.vehiculo.tipo}'"
+                        )
+
+            logging.info("🖱️ Clase del vehículo seleccionada")
+
+        except Exception as e:
+            logging.warning(f"{e}")
+            raise Exception(f"No se pudo seleccionar la clase del vehículo")
 
         def seleccionar_dropdown(pg, input_selector, texto):
             pg.locator(input_selector).click()
             time.sleep(0.3)
             patron = re.compile(rf"^\s*{re.escape(str(texto))}\s*$", re.IGNORECASE)
             opcion = pg.locator("li, span[data-bind*='label']").filter(has_text=patron)
+
             if opcion.count() == 0:
-                opcion = pg.locator("li, span[data-bind*='label']").filter(has_text=str(texto))
-            opcion.first.click()
+                raise Exception(f"No existe la opción '{texto}'")
+
+            opcion.first.click(timeout=5000)
+
+            # if opcion.count() == 0:
+            #     opcion = pg.locator("li, span[data-bind*='label']").filter(has_text=str(texto))
+            # opcion.first.click()
 
         def normalizar_texto(texto):
             return re.sub(r"\s+", "", str(texto)).upper()

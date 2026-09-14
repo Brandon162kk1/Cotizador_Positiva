@@ -26,7 +26,6 @@ def enviar_x_wsp(ctx=None, tipo="notificacion", mensaje=None, archivo=None, tele
             if not celular and hasattr(ctx, "cliente"):
                 celular = getattr(ctx.cliente, "celular", None)
             telefono = celular
-            logging.info(f"Celular obtenido del contexto: {telefono}")
         except Exception:
             telefono = None
     if not telefono:
@@ -83,7 +82,7 @@ def enviar_x_wsp(ctx=None, tipo="notificacion", mensaje=None, archivo=None, tele
         response = requests.post(url_n8n_wsp, json=payload, timeout=30)
 
         if response.status_code in (200, 201, 204):
-            logging.info("✅ Notificación enviada por Evolution API")
+            logging.info(f"✅ Notificación enviada por Evolution API a {telefono}")
         else:
             logging.info(f"⚠️ Problemas en el envio de notificación a Evolution API - {response.status_code} - {response.text}")
 
