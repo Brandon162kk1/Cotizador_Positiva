@@ -675,10 +675,12 @@ def procesar_job(page, raw_payload, job_id, r_conn):
 
         page.locator("#producto_input").click()
         logging.info("🖱️ Clic en 'Producto'")
-        if str(ctx.vehiculo.localizacion).upper() == "LIMA":
-            text = "US$ AUTO TOTAL - DONGFENG - DOLARES - LIMA"
-        else:
-            text = "US$ AUTO COMERCIAL - DONGFENG - DOLARES - PROVINCIAS"
+
+        uso = "TOTAL" if str(ctx.vehiculo.uso).upper() == "PARTICULAR" else "COMERCIAL"
+        ubicacion = str(ctx.vehiculo.localizacion).upper()
+
+        text = f"US$ AUTO {uso} - DONGFENG - DOLARES - {'LIMA' if ubicacion == 'LIMA' else 'PROVINCIAS'}"
+
         page.locator("span").filter(has_text=text).first.click()
         logging.info(f"⌨️ Seleccionando '{text}'")
 
@@ -859,13 +861,13 @@ def procesar_job(page, raw_payload, job_id, r_conn):
     except PlaywrightError as e:
         error = True
         logging.info("--------------------------------")
-        logging.error(f"❌ Error técnico de Playwright procesando Job {job_id}")
+        logging.error(f"❌ Error técnico de Playwright")
         logging.exception(e)
-        msj_error = "Problemas Técnicos del Agente"
+        msj_error = "Problemas técnicos, comunícate con el área de sistemas"
     except Exception as e:
         error = True
         logging.info("--------------------------------")
-        logging.warning(f"⚠️ Error funcional procesando Job {job_id}: {e}")
+        logging.warning(f"⚠️ Error funcional : {e}")
         msj_error = str(e)
     finally:
         if error:
