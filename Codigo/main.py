@@ -395,7 +395,7 @@ def inicializar_sesion(page, r_conn, ctx=None):
                     id_cot_txt = f" N° {ctx.id_cot}" if ctx and getattr(ctx, "id_cot", None) else ""
                     url_vnc = f"{URL_HOST_BASE}:{PUERTO}/vnc_auto.html?password={PASS_EN_GRAFICO}"
                     aviso_intento = f"\n⚠️ Intento {intento} de {MAX_INTENTOS_CAPTCHA}" if intento > 1 else ""
-                    mensaje = f"""{'Esto es una prueba ,' if not entorno else ''}Ingresar a {url_vnc} y resolver el captcha para continuar con la cotización{id_cot_txt}.{aviso_intento}\n👤 Usuario: {USER_POS}\n🔑 Password: {PASS_POS}"""
+                    mensaje = f"""Ingresar a {url_vnc} y resolver el captcha para continuar con la cotización{id_cot_txt}.{aviso_intento}\n👤 Usuario: {USER_POS}\n🔑 Password: {PASS_POS}"""
                     enviar_x_wsp(tipo="notificacion", mensaje=mensaje)
 
         except Exception as e:
