@@ -129,11 +129,6 @@ class Ejecutivo(BaseModel):
         self.nombre = data.get("ejecutivo")
         self.celular = data.get("celular_ejecutivo")
 
-class Compania(BaseModel):
-    def __init__(self, data: dict):
-        self.usuario = data.get("usuario")
-        self.contrasena = data.get("password")
-
 class Organizacion(BaseModel):
     def __init__(self, data: dict):
         self.nombre = data.get("nom_organizacion")
@@ -176,7 +171,6 @@ class CotizacionContexto:
 
         self.movimiento = data.get("movimiento") or "COTIZACION"
         self.id_cot = str(data.get("id") or data.get("id_cot") or "0")
-        self.compania = Compania(data)
         self.organizacion = Organizacion(data)
         self.vehiculo = Vehiculo(data)
         self.credito = Credito(data)
@@ -186,7 +180,6 @@ class CotizacionContexto:
 
     def __str__(self):
         return pformat({
-            "Compania": self.compania.to_dict(ocultar=["usuario", "contrasena"]),
             "Organizacion": self.organizacion.to_dict(),
             "Vehículo": self.vehiculo.to_dict(ocultar=["num_rodaje", "num_motor", "num_serie"]),
             "Crédito": self.credito.to_dict(),
